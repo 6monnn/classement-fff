@@ -73,6 +73,21 @@ select {
   margin-top: 16px;
 }
 
+.missing-table th,
+.missing-table td {
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.missing-table input,
+.missing-table select {
+  padding: 6px 8px;
+}
+
+.missing-table .score-input {
+  width: 60px;
+}
+
 .favorites {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -360,24 +375,26 @@ th:nth-child(2) {
 }
 
 .standings-table th:nth-child(3),
-.standings-table td:nth-child(3),
+.standings-table td:nth-child(3) {
+  width: 40px;
+}
+
 .standings-table th:nth-child(4),
 .standings-table td:nth-child(4),
 .standings-table th:nth-child(5),
 .standings-table td:nth-child(5),
 .standings-table th:nth-child(6),
-.standings-table td:nth-child(6) {
-  width: 40px;
-}
-
+.standings-table td:nth-child(6),
 .standings-table th:nth-child(7),
-.standings-table td:nth-child(7) {
-  width: 56px;
-}
-
+.standings-table td:nth-child(7),
 .standings-table th:nth-child(8),
 .standings-table td:nth-child(8) {
   width: 40px;
+}
+
+.standings-table th:nth-child(9),
+.standings-table td:nth-child(9) {
+  width: 56px;
 }
 
 .standings-table th:nth-child(9),
@@ -388,4 +405,10 @@ th:nth-child(2) {
 .standings-table th:nth-child(10),
 .standings-table td:nth-child(10) {
   width: 150px;
+}
+
+.standings-table th:last-child,
+.standings-table td:last-child {
+  text-align: left;
+  padding-left: 6px;
 }

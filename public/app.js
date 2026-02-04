@@ -3,10 +3,11 @@ const panels = document.querySelectorAll(".tab-panel");
 
 const urlInput = document.getElementById("urlInput");
 const loadBtn = document.getElementById("loadBtn");
-const refreshBtn = document.getElementById("refreshBtn");
 const statusEl = document.getElementById("status");
 const favoritesSelect = document.getElementById("favoritesSelect");
 const favoriteBtn = document.getElementById("favoriteBtn");
+const missingResultsList = document.getElementById("missingResultsList");
+const addMissingRowBtn = document.getElementById("addMissingRowBtn");
 
 const standingsBody = document.querySelector("#standingsTable tbody");
 const resultsBody = document.querySelector("#resultsTable tbody");
@@ -16,12 +17,19 @@ const resultsTeamFilter = document.getElementById("resultsTeamFilter");
 const calendarTeamFilter = document.getElementById("calendarTeamFilter");
 const standingsTitle = document.getElementById("standingsTitle");
 
-let lastQuery = null;
 let allMatches = [];
+let manualMatches = [];
+let dataCache = null;
+let manualRows = [];
+let availableTeams = [];
 const favoritesKey = "classement_favoris";
 const defaultFavorite = {
   title: "U13 Niveau A - Phase 1 Poule D",
   url: "https://escaut.fff.fr/competitions?tab=calendar&id=439637&phase=1&poule=4&type=ch",
+};
+const defaultFavorite2 = {
+  title: "U13 Niveau B - Phase 1 Poule F",
+  url: "https://escaut.fff.fr/competitions?tab=calendar&id=439638&phase=1&poule=6&type=ch",
 };
 
 function setStatus(message, isError = false) {
@@ -59,14 +67,14 @@ function buildQueryFromForm() {
 
 function loadFavorites() {
   const raw = localStorage.getItem(favoritesKey);
-  if (!raw) return [defaultFavorite];
+  if (!raw) return [defaultFavorite, defaultFavorite2];
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) return parsed;
   } catch (error) {
-    return [defaultFavorite];
+    return [defaultFavorite, defaultFavorite2];
   }
-  return [defaultFavorite];
+  return [defaultFavorite, defaultFavorite2];
 }
 
 function saveFavorites(list) {
@@ -82,9 +90,11 @@ function renderFavorites() {
     option.textContent = fav.title || `Favori ${index + 1}`;
     favoritesSelect.appendChild(option);
   });
-  if (!urlInput.value && favorites.length > 0) {
-    urlInput.value = favorites[0].url;
+  if (!urlInput.value) {
+    urlInput.value = defaultFavorite.url;
   }
+  favoritesSelect.value = urlInput.value;
+  updateFavoriteButtonState();
 }
 
 function addCurrentFavorite() {
@@ -103,6 +113,60 @@ function addCurrentFavorite() {
   renderFavorites();
   favoritesSelect.value = url;
   setStatus("Favori ajouté.", false);
+}
+
+function updateFavoriteButtonState() {
+  const url = urlInput.value.trim();
+  const favorites = loadFavorites();
+  const exists = favorites.some((fav) => fav.url === url);
+  favoriteBtn.disabled = !url || exists;
+}
+
+function resetManualMatches() {
+  manualMatches = [];
+  manualRows = [];
+}
+
+function buildManualMatch() {
+  const homeTeam = missingHome.value;
+  const awayTeam = missingAway.value;
+  const homeGoals = parseInt(missingHomeGoals.value, 10);
+  const awayGoals = parseInt(missingAwayGoals.value, 10);
+  const dateValue = missingDate.value;
+
+  if (!homeTeam || !awayTeam) {
+    setStatus("Choisis les deux équipes.", true);
+    return null;
+  }
+  if (homeTeam === awayTeam) {
+    setStatus("Les équipes doivent être différentes.", true);
+    return null;
+  }
+  if (Number.isNaN(homeGoals) || Number.isNaN(awayGoals)) {
+    setStatus("Renseigne les buts domicile et extérieur.", true);
+    return null;
+  }
+  if (!dateValue) {
+    setStatus("Choisis une date.", true);
+    return null;
+  }
+
+  const dateIso = new Date(`${dateValue}T00:00:00`).toISOString();
+
+  return {
+    ma_no: `manual-${Date.now()}`,
+    date: dateIso,
+    time: "",
+    home_score: homeGoals,
+    away_score: awayGoals,
+    home: { short_name: homeTeam },
+    away: { short_name: awayTeam },
+    status_label: "",
+  };
+}
+
+function setAvailableTeams(teams) {
+  availableTeams = teams.filter((t) => t !== "Toutes");
 }
 
 function createTeamCell(name, logoUrl, side, nameClass = "") {
@@ -148,6 +212,11 @@ function renderStandings(rows, formMap) {
 
     tr.appendChild(Object.assign(document.createElement("td"), { textContent: row.rank }));
     tr.appendChild(teamCell);
+    const pointsCell = Object.assign(document.createElement("td"), {
+      textContent: row.points,
+    });
+    pointsCell.classList.add("points-cell");
+    tr.appendChild(pointsCell);
     tr.appendChild(Object.assign(document.createElement("td"), { textContent: row.played }));
     tr.appendChild(Object.assign(document.createElement("td"), { textContent: row.wins }));
     tr.appendChild(Object.assign(document.createElement("td"), { textContent: row.draws }));
@@ -156,11 +225,6 @@ function renderStandings(rows, formMap) {
       Object.assign(document.createElement("td"), { textContent: `${row.gf}:${row.ga}` })
     );
     tr.appendChild(Object.assign(document.createElement("td"), { textContent: row.gd }));
-    const pointsCell = Object.assign(document.createElement("td"), {
-      textContent: row.points,
-    });
-    pointsCell.classList.add("points-cell");
-    tr.appendChild(pointsCell);
 
     const formCell = document.createElement("td");
     formCell.style.textAlign = "left";
@@ -187,6 +251,95 @@ function renderStandings(rows, formMap) {
 
     standingsBody.appendChild(tr);
   });
+}
+
+function computeStandingsClient(matches) {
+  const table = new Map();
+
+  matches.forEach((match) => {
+    const homeScore = match.home_score;
+    const awayScore = match.away_score;
+    if (typeof homeScore !== "number" || typeof awayScore !== "number") return;
+
+    const homeName = mapTeamName(match.home);
+    const awayName = mapTeamName(match.away);
+    const homeLogo = mapTeamLogo(match.home);
+    const awayLogo = mapTeamLogo(match.away);
+
+    if (!table.has(homeName)) {
+      table.set(homeName, {
+        team: homeName,
+        logo: homeLogo || null,
+        played: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        points: 0,
+      });
+    }
+    if (!table.has(awayName)) {
+      table.set(awayName, {
+        team: awayName,
+        logo: awayLogo || null,
+        played: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        points: 0,
+      });
+    }
+
+    const homeRow = table.get(homeName);
+    const awayRow = table.get(awayName);
+    if (!homeRow.logo && homeLogo) homeRow.logo = homeLogo;
+    if (!awayRow.logo && awayLogo) awayRow.logo = awayLogo;
+
+    homeRow.played += 1;
+    awayRow.played += 1;
+    homeRow.gf += homeScore;
+    homeRow.ga += awayScore;
+    awayRow.gf += awayScore;
+    awayRow.ga += homeScore;
+
+    if (homeScore > awayScore) {
+      homeRow.wins += 1;
+      homeRow.points += 3;
+      awayRow.losses += 1;
+    } else if (homeScore < awayScore) {
+      awayRow.wins += 1;
+      awayRow.points += 3;
+      homeRow.losses += 1;
+    } else {
+      homeRow.draws += 1;
+      awayRow.draws += 1;
+      homeRow.points += 1;
+      awayRow.points += 1;
+    }
+  });
+
+  const rows = Array.from(table.values()).map((row) => ({
+    ...row,
+    gd: row.gf - row.ga,
+  }));
+
+  rows.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.gd !== a.gd) return b.gd - a.gd;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    return a.team.localeCompare(b.team, "fr", { sensitivity: "base" });
+  });
+
+  rows.forEach((row, index) => {
+    row.rank = index + 1;
+  });
+
+  return rows;
 }
 
 function formatDate(value) {
@@ -269,7 +422,9 @@ function renderResults(matches) {
     const awayLogo = mapTeamLogo(match.away);
     const homeScore = match.home_score;
     const awayScore = match.away_score;
-    const score = `${homeScore} - ${awayScore}`;
+    const hasScore =
+      typeof homeScore === "number" && typeof awayScore === "number";
+    const score = hasScore ? `${homeScore} - ${awayScore}` : "? - ?";
 
     let winner = "";
     if (homeScore > awayScore) winner = home;
@@ -305,6 +460,13 @@ function renderResults(matches) {
 
     const scoreCell = Object.assign(document.createElement("td"), { textContent: score });
     scoreCell.classList.add("score-cell");
+    if (match.manual) {
+      const manualTag = document.createElement("span");
+      manualTag.textContent = " (ajout manuel)";
+      manualTag.style.fontSize = "0.8rem";
+      manualTag.style.color = "#6b7280";
+      scoreCell.appendChild(manualTag);
+    }
     tr.appendChild(scoreCell);
 
     const awayCell = document.createElement("td");
@@ -421,6 +583,256 @@ function splitMatches(matches) {
   return { results, calendar };
 }
 
+function getMissingResults(calendarMatches) {
+  const now = new Date();
+  return calendarMatches.filter((match) => {
+    const dateValue = getMatchDateTimeValue(match);
+    if (!dateValue) return false;
+    const isPast = dateValue < now;
+    if (!isPast) return false;
+    const home = mapTeamName(match.home);
+    const away = mapTeamName(match.away);
+    return !manualMatches.some(
+      (m) =>
+        mapTeamName(m.home) === home &&
+        mapTeamName(m.away) === away &&
+        getMatchDate(m) === getMatchDate(match)
+    );
+  });
+}
+
+function renderMissingResults(matches) {
+  if (!missingResultsList) return;
+  missingResultsList.innerHTML = "";
+  const allRows = [];
+
+  matches.forEach((match) => {
+    allRows.push({ type: "missing", match });
+  });
+
+  manualMatches.forEach((match) => {
+    allRows.push({ type: "manual-existing", match });
+  });
+
+  manualRows.forEach((row) => {
+    allRows.push({ type: "manual", row });
+  });
+
+  if (allRows.length === 0) {
+    const emptyRow = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 6;
+    td.textContent = "Aucun résultat manquant.";
+    emptyRow.appendChild(td);
+    missingResultsList.appendChild(emptyRow);
+    return;
+  }
+
+  allRows.forEach((entry) => {
+    if (entry.type === "missing") {
+      const match = entry.match;
+      const dateValue = getMatchDate(match);
+      const displayDate = formatResultDate(dateValue);
+      const home = mapTeamName(match.home);
+      const away = mapTeamName(match.away);
+
+      const tr = document.createElement("tr");
+
+      tr.appendChild(Object.assign(document.createElement("td"), { textContent: displayDate }));
+      tr.appendChild(Object.assign(document.createElement("td"), { textContent: home }));
+
+      const homeInput = document.createElement("input");
+      homeInput.type = "number";
+      homeInput.min = "0";
+      homeInput.className = "score-input";
+      const homeTd = document.createElement("td");
+      homeTd.appendChild(homeInput);
+      tr.appendChild(homeTd);
+
+      tr.appendChild(Object.assign(document.createElement("td"), { textContent: away }));
+
+      const awayInput = document.createElement("input");
+      awayInput.type = "number";
+      awayInput.min = "0";
+      awayInput.className = "score-input";
+      const awayTd = document.createElement("td");
+      awayTd.appendChild(awayInput);
+      tr.appendChild(awayTd);
+
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.textContent = "Valider";
+      addBtn.addEventListener("click", () => {
+        const homeGoals = parseInt(homeInput.value, 10);
+        const awayGoals = parseInt(awayInput.value, 10);
+        if (Number.isNaN(homeGoals) || Number.isNaN(awayGoals)) {
+          setStatus("Renseigne les buts pour ce match.", true);
+          return;
+        }
+      const manual = {
+        ma_no: `manual-${Date.now()}`,
+        date: match.date || match.initial_date || new Date().toISOString(),
+        time: match.time || "",
+        home_score: homeGoals,
+        away_score: awayGoals,
+        home: { short_name: home },
+        away: { short_name: away },
+        status_label: "",
+        manual: true,
+      };
+        manualMatches.push(manual);
+        const mergedMatches = [...allMatches, ...manualMatches];
+        const formMap = buildFormMap(mergedMatches);
+        const standings = computeStandingsClient(mergedMatches);
+        renderStandings(standings, formMap);
+        applyFilters();
+        setStatus("Résultat ajouté.", false);
+      });
+      const actionTd = document.createElement("td");
+      actionTd.appendChild(addBtn);
+      tr.appendChild(actionTd);
+
+      missingResultsList.appendChild(tr);
+      return;
+    }
+
+    const tr = document.createElement("tr");
+
+    const dateInput = document.createElement("input");
+    dateInput.type = "date";
+    if (entry.type === "manual-existing") {
+      const d = getMatchDate(entry.match);
+      if (d) dateInput.value = d.slice(0, 10);
+    } else if (entry.row?.date) {
+      dateInput.value = entry.row.date;
+    }
+    const dateTd = document.createElement("td");
+    dateTd.appendChild(dateInput);
+    tr.appendChild(dateTd);
+
+    const homeSelect = document.createElement("select");
+    ["", ...availableTeams].forEach((team) => {
+      const opt = document.createElement("option");
+      opt.value = team;
+      opt.textContent = team || "Choisir...";
+      homeSelect.appendChild(opt);
+    });
+    if (entry.type === "manual-existing") {
+      homeSelect.value = mapTeamName(entry.match.home);
+    } else if (entry.row?.home) {
+      homeSelect.value = entry.row.home;
+    }
+    const homeTd = document.createElement("td");
+    homeTd.appendChild(homeSelect);
+    tr.appendChild(homeTd);
+
+    const homeInput = document.createElement("input");
+    homeInput.type = "number";
+    homeInput.min = "0";
+    homeInput.className = "score-input";
+    if (entry.type === "manual-existing") {
+      homeInput.value = entry.match.home_score ?? "";
+    } else if (entry.row?.homeGoals !== undefined) {
+      homeInput.value = entry.row.homeGoals;
+    }
+    const homeGoalsTd = document.createElement("td");
+    homeGoalsTd.appendChild(homeInput);
+    tr.appendChild(homeGoalsTd);
+
+    const awaySelect = document.createElement("select");
+    ["", ...availableTeams].forEach((team) => {
+      const opt = document.createElement("option");
+      opt.value = team;
+      opt.textContent = team || "Choisir...";
+      awaySelect.appendChild(opt);
+    });
+    if (entry.type === "manual-existing") {
+      awaySelect.value = mapTeamName(entry.match.away);
+    } else if (entry.row?.away) {
+      awaySelect.value = entry.row.away;
+    }
+    const awayTd = document.createElement("td");
+    awayTd.appendChild(awaySelect);
+    tr.appendChild(awayTd);
+
+    const awayInput = document.createElement("input");
+    awayInput.type = "number";
+    awayInput.min = "0";
+    awayInput.className = "score-input";
+    if (entry.type === "manual-existing") {
+      awayInput.value = entry.match.away_score ?? "";
+    } else if (entry.row?.awayGoals !== undefined) {
+      awayInput.value = entry.row.awayGoals;
+    }
+    const awayGoalsTd = document.createElement("td");
+    awayGoalsTd.appendChild(awayInput);
+    tr.appendChild(awayGoalsTd);
+
+    const actionBtn = document.createElement("button");
+    actionBtn.type = "button";
+    actionBtn.textContent = entry.type === "manual-existing" ? "Modifier" : "Ajouter";
+    actionBtn.addEventListener("click", () => {
+      const homeTeam = homeSelect.value;
+      const awayTeam = awaySelect.value;
+      const homeGoals = parseInt(homeInput.value, 10);
+      const awayGoals = parseInt(awayInput.value, 10);
+      const dateValue = dateInput.value;
+
+      if (!homeTeam || !awayTeam) {
+        setStatus("Choisis les deux équipes.", true);
+        return;
+      }
+      if (homeTeam === awayTeam) {
+        setStatus("Les équipes doivent être différentes.", true);
+        return;
+      }
+      if (Number.isNaN(homeGoals) || Number.isNaN(awayGoals)) {
+        setStatus("Renseigne les buts domicile et extérieur.", true);
+        return;
+      }
+      if (!dateValue) {
+        setStatus("Choisis une date.", true);
+        return;
+      }
+
+      const dateIso = new Date(`${dateValue}T00:00:00`).toISOString();
+      if (entry.type === "manual-existing") {
+        entry.match.date = dateIso;
+        entry.match.home_score = homeGoals;
+        entry.match.away_score = awayGoals;
+        entry.match.home = { short_name: homeTeam };
+        entry.match.away = { short_name: awayTeam };
+        entry.match.manual = true;
+      } else {
+        const manual = {
+          ma_no: `manual-${Date.now()}`,
+          date: dateIso,
+          time: "",
+          home_score: homeGoals,
+          away_score: awayGoals,
+          home: { short_name: homeTeam },
+          away: { short_name: awayTeam },
+          status_label: "",
+          manual: true,
+        };
+        manualMatches.push(manual);
+      }
+
+      const mergedMatches = [...allMatches, ...manualMatches];
+      const formMap = buildFormMap(mergedMatches);
+      const standings = computeStandingsClient(mergedMatches);
+      renderStandings(standings, formMap);
+      applyFilters();
+      setStatus("Match enregistré.", false);
+    });
+    const actionTd = document.createElement("td");
+    actionTd.appendChild(actionBtn);
+    tr.appendChild(actionTd);
+
+    missingResultsList.appendChild(tr);
+  });
+}
+
 function buildTeamOptions(matches) {
   const map = new Map();
   matches.forEach((match) => {
@@ -448,7 +860,9 @@ function populateFilter(select, options) {
 }
 
 function applyFilters() {
-  const { results, calendar } = splitMatches(allMatches);
+  const mergedMatches = [...allMatches, ...manualMatches];
+  const { results, calendar } = splitMatches(mergedMatches);
+  const missingResults = getMissingResults(calendar);
   const resultsFilter = resultsTeamFilter.value;
   const calendarFilter = calendarTeamFilter.value;
 
@@ -464,7 +878,8 @@ function applyFilters() {
       )
     : calendar;
 
-  const sortedResults = [...filteredResults].sort((a, b) => {
+  const resultsWithMissing = [...filteredResults, ...missingResults];
+  const sortedResults = [...resultsWithMissing].sort((a, b) => {
     const dateA = getMatchDateTimeValue(a);
     const dateB = getMatchDateTimeValue(b);
     if (dateA && dateB) return dateB - dateA;
@@ -484,6 +899,7 @@ function applyFilters() {
 
   renderResults(sortedResults);
   renderCalendar(sortedCalendar);
+  renderMissingResults(missingResults);
 }
 
 async function loadStandings(query) {
@@ -495,24 +911,26 @@ async function loadStandings(query) {
 
   const response = await fetch(`/api/standings?${params.toString()}`);
   const data = await response.json();
+  dataCache = data;
 
   if (!response.ok) {
     throw new Error(data.error || "Erreur lors du chargement.");
   }
 
   allMatches = data.matches || [];
+  resetManualMatches();
   const formMap = buildFormMap(allMatches);
-  renderStandings(data.standings || [], formMap);
+  const standings = computeStandingsClient(allMatches);
+  renderStandings(standings, formMap);
   standingsTitle.textContent = data.title || "";
 
   const teams = buildTeamOptions(allMatches);
   populateFilter(resultsTeamFilter, teams);
   populateFilter(calendarTeamFilter, teams);
+  setAvailableTeams(teams);
 
   applyFilters();
 
-  lastQuery = query;
-  refreshBtn.disabled = false;
   setStatus(`Classement mis à jour (${data.source || "OK"}).`);
 }
 
@@ -525,19 +943,18 @@ loadBtn.addEventListener("click", async () => {
   }
 });
 
-refreshBtn.addEventListener("click", async () => {
-  if (!lastQuery) return;
-  try {
-    await loadStandings(lastQuery);
-  } catch (error) {
-    setStatus(error.message, true);
-  }
-});
-
 favoriteBtn.addEventListener("click", addCurrentFavorite);
 
 favoritesSelect.addEventListener("change", () => {
   urlInput.value = favoritesSelect.value || "";
+  updateFavoriteButtonState();
+});
+
+urlInput.addEventListener("input", updateFavoriteButtonState);
+
+addMissingRowBtn?.addEventListener("click", () => {
+  manualRows.push({ date: "", home: "", away: "" });
+  applyFilters();
 });
 
 resultsTeamFilter.addEventListener("change", applyFilters);
@@ -545,3 +962,7 @@ calendarTeamFilter.addEventListener("change", applyFilters);
 
 renderFavorites();
 wireTabs();
+
+if (urlInput.value) {
+  loadStandings({ url: urlInput.value }).catch(() => {});
+}
