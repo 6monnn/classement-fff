@@ -1,0 +1,122 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Classement District</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <h1>Classement District</h1>
+        <p>
+          Colle un lien FFF “Résultat” pour générer le classement et les
+          résultats.
+        </p>
+      </header>
+
+      <section class="card">
+        <div class="favorites">
+          <div class="favorites-main">
+            <label for="favoritesSelect">Classement favoris</label>
+            <select id="favoritesSelect"></select>
+          </div>
+          <div class="favorites-alt">
+            <label for="urlInput">Lien (alternatif)</label>
+            <input
+              id="urlInput"
+              type="url"
+              placeholder="https://escaut.fff.fr/competitions?tab=resultat&id=..."
+            />
+          </div>
+        </div>
+        <div class="actions">
+          <button id="loadBtn" type="button">Charger le classement</button>
+          <button id="refreshBtn" type="button" disabled>Mettre à jour</button>
+          <button id="favoriteBtn" type="button">Ajouter aux favoris</button>
+        </div>
+
+        <div id="status" class="status" role="status"></div>
+      </section>
+
+      <section class="card">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="classement" type="button">
+            Classement
+          </button>
+          <button class="tab" data-tab="results" type="button">Résultats</button>
+          <button class="tab" data-tab="calendar" type="button">
+            Calendrier
+          </button>
+        </div>
+
+        <div class="tab-panel active" id="tab-classement" role="tabpanel">
+          <h2 id="standingsTitle" class="standings-title"></h2>
+          <div class="table-wrap">
+            <table id="standingsTable" class="standings-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Équipe</th>
+                  <th>MJ</th>
+                  <th>V</th>
+                  <th>N</th>
+                  <th>D</th>
+                  <th>BP:BC</th>
+                  <th>Diff</th>
+                  <th>Pts</th>
+                  <th>Forme</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-results" role="tabpanel">
+          <div class="filters">
+            <label for="resultsTeamFilter">Filtrer par équipe</label>
+            <select id="resultsTeamFilter"></select>
+          </div>
+          <div class="table-wrap">
+            <table id="resultsTable" class="compact-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th></th>
+                  <th class="score-cell">Score</th>
+                  <th></th>
+                  <th class="result-col">Résultat</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-calendar" role="tabpanel">
+          <div class="filters">
+            <label for="calendarTeamFilter">Filtrer par équipe</label>
+            <select id="calendarTeamFilter"></select>
+          </div>
+          <div class="table-wrap">
+            <table id="calendarTable" class="compact-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th></th>
+                  <th class="score-cell">Score</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
