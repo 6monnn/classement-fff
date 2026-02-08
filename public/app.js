@@ -6,6 +6,7 @@ const loadBtn = document.getElementById("loadBtn");
 const statusEl = document.getElementById("status");
 const favoritesSelect = document.getElementById("favoritesSelect");
 const favoriteBtn = document.getElementById("favoriteBtn");
+const clearFavoritesBtn = document.getElementById("clearFavoritesBtn");
 const missingResultsList = document.getElementById("missingResultsList");
 const addMissingRowBtn = document.getElementById("addMissingRowBtn");
 
@@ -126,6 +127,14 @@ function addCurrentFavorite() {
   renderFavorites();
   favoritesSelect.value = url;
   setStatus("Favori ajouté.", false);
+}
+
+function clearStoredFavorites() {
+  localStorage.removeItem(favoritesKey);
+  document.cookie = `${favoritesKey}=; Max-Age=0; path=/`;
+  urlInput.value = defaultFavorites[0]?.url || "";
+  renderFavorites();
+  setStatus("Favoris supprimés.", false);
 }
 
 function updateFavoriteButtonState() {
@@ -957,6 +966,7 @@ loadBtn.addEventListener("click", async () => {
 });
 
 favoriteBtn.addEventListener("click", addCurrentFavorite);
+clearFavoritesBtn?.addEventListener("click", clearStoredFavorites);
 
 favoritesSelect.addEventListener("change", () => {
   urlInput.value = favoritesSelect.value || "";
