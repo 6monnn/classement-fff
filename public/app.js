@@ -2,7 +2,6 @@
 const panels = document.querySelectorAll(".tab-panel");
 
 const urlInput = document.getElementById("urlInput");
-const loadBtn = document.getElementById("loadBtn");
 const statusEl = document.getElementById("status");
 const favoritesSelect = document.getElementById("favoritesSelect");
 const favoriteBtn = document.getElementById("favoriteBtn");
@@ -956,21 +955,19 @@ async function loadStandings(query) {
   setStatus(`Classement mis à jour (${data.source || "OK"}).`);
 }
 
-loadBtn.addEventListener("click", async () => {
+favoriteBtn.addEventListener("click", addCurrentFavorite);
+clearFavoritesBtn?.addEventListener("click", clearStoredFavorites);
+
+favoritesSelect.addEventListener("change", async () => {
+  urlInput.value = favoritesSelect.value || "";
+  updateFavoriteButtonState();
+  if (!urlInput.value) return;
   try {
     const query = buildQueryFromForm();
     await loadStandings(query);
   } catch (error) {
     setStatus(error.message, true);
   }
-});
-
-favoriteBtn.addEventListener("click", addCurrentFavorite);
-clearFavoritesBtn?.addEventListener("click", clearStoredFavorites);
-
-favoritesSelect.addEventListener("change", () => {
-  urlInput.value = favoritesSelect.value || "";
-  updateFavoriteButtonState();
 });
 
 urlInput.addEventListener("input", updateFavoriteButtonState);
