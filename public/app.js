@@ -23,14 +23,20 @@ let dataCache = null;
 let manualRows = [];
 let availableTeams = [];
 const favoritesKey = "classement_favoris";
-const defaultFavorite = {
-  title: "U13 Niveau A - Phase 1 Poule D",
-  url: "https://escaut.fff.fr/competitions?tab=calendar&id=439637&phase=1&poule=4&type=ch",
-};
-const defaultFavorite2 = {
-  title: "U13 Niveau B - Phase 1 Poule F",
-  url: "https://escaut.fff.fr/competitions?tab=calendar&id=439638&phase=1&poule=6&type=ch",
-};
+const defaultFavorites = [
+  {
+    title: "U13 Niveau A - Phase 1 Poule D",
+    url: "https://escaut.fff.fr/competitions?tab=calendar&id=439637&phase=1&poule=4&type=ch",
+  },
+  {
+    title: "U13 Niveau B - Phase 1 Poule F",
+    url: "https://escaut.fff.fr/competitions?tab=calendar&id=439638&phase=1&poule=6&type=ch",
+  },
+  {
+    title: "U11 Niveau A - Phase 1 Poule B",
+    url: "https://escaut.fff.fr/competitions?tab=calendar&id=439656&phase=1&poule=2&type=ch",
+  },
+];
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -67,14 +73,21 @@ function buildQueryFromForm() {
 
 function loadFavorites() {
   const raw = localStorage.getItem(favoritesKey);
-  if (!raw) return [defaultFavorite, defaultFavorite2];
+  if (!raw) return [...defaultFavorites];
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const merged = [...parsed];
+      defaultFavorites.forEach((fav) => {
+        const exists = merged.some((item) => item?.url === fav.url);
+        if (!exists) merged.push(fav);
+      });
+      return merged;
+    }
   } catch (error) {
-    return [defaultFavorite, defaultFavorite2];
+    return [...defaultFavorites];
   }
-  return [defaultFavorite, defaultFavorite2];
+  return [...defaultFavorites];
 }
 
 function saveFavorites(list) {
@@ -91,7 +104,7 @@ function renderFavorites() {
     favoritesSelect.appendChild(option);
   });
   if (!urlInput.value) {
-    urlInput.value = defaultFavorite.url;
+    urlInput.value = defaultFavorites[0]?.url || "";
   }
   favoritesSelect.value = urlInput.value;
   updateFavoriteButtonState();
