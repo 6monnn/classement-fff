@@ -29,11 +29,10 @@
               type="url"
               placeholder="https://escaut.fff.fr/competitions?tab=resultat&id=..."
             />
+            <div class="link-actions">
+              <button id="loadBtn" type="button">Charger le classement</button>
+            </div>
           </div>
-        </div>
-        <div class="actions">
-          <button id="favoriteBtn" type="button">Ajouter aux favoris</button>
-          <button id="clearFavoritesBtn" type="button">Supprimer les favoris</button>
         </div>
 
         <div id="status" class="status" role="status"></div>
@@ -51,7 +50,18 @@
         </div>
 
         <div class="tab-panel active" id="tab-classement" role="tabpanel">
-          <h2 id="standingsTitle" class="standings-title"></h2>
+          <div class="standings-header">
+            <button
+              id="favoriteToggleBtn"
+              class="favorite-toggle"
+              type="button"
+              aria-label="Ajouter aux favoris"
+              title="Ajouter aux favoris"
+            >
+              ☆
+            </button>
+            <h2 id="standingsTitle" class="standings-title"></h2>
+          </div>
           <div class="table-wrap">
             <table id="standingsTable" class="standings-table">
               <thead>
@@ -141,6 +151,13 @@
           Les matchs passés sans score sont pré-remplis. Tu peux aussi ajouter un
           match manuel. Les ajouts sont temporaires (session uniquement).
         </p>
+      </section>
+
+      <section class="card">
+        <p class="hint">Favoris locaux (stockés uniquement dans ce navigateur).</p>
+        <div class="actions">
+          <button id="clearFavoritesBtn" type="button">Supprimer les favoris locaux</button>
+        </div>
       </section>
     </div>
 

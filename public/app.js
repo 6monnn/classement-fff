@@ -2,9 +2,10 @@
 const panels = document.querySelectorAll(".tab-panel");
 
 const urlInput = document.getElementById("urlInput");
+const loadBtn = document.getElementById("loadBtn");
 const statusEl = document.getElementById("status");
 const favoritesSelect = document.getElementById("favoritesSelect");
-const favoriteBtn = document.getElementById("favoriteBtn");
+const favoriteToggleBtn = document.getElementById("favoriteToggleBtn");
 const clearFavoritesBtn = document.getElementById("clearFavoritesBtn");
 const missingResultsList = document.getElementById("missingResultsList");
 const addMissingRowBtn = document.getElementById("addMissingRowBtn");
@@ -22,6 +23,7 @@ let manualMatches = [];
 let dataCache = null;
 let manualRows = [];
 let availableTeams = [];
+let loadedUrl = "";
 const favoritesKey = "classement_favoris";
 const defaultFavorites = [
   {
@@ -107,7 +109,7 @@ function renderFavorites() {
     urlInput.value = defaultFavorites[0]?.url || "";
   }
   favoritesSelect.value = urlInput.value;
-  updateFavoriteButtonState();
+  updateFavoriteIconState();
 }
 
 function addCurrentFavorite() {
@@ -133,14 +135,25 @@ function clearStoredFavorites() {
   document.cookie = `${favoritesKey}=; Max-Age=0; path=/`;
   urlInput.value = defaultFavorites[0]?.url || "";
   renderFavorites();
+  updateFavoriteIconState();
   setStatus("Favoris supprimés.", false);
 }
 
-function updateFavoriteButtonState() {
+function updateFavoriteIconState() {
   const url = urlInput.value.trim();
+  const hasLoadedStandings = Boolean(standingsTitle.textContent.trim()) && loadedUrl === url;
   const favorites = loadFavorites();
   const exists = favorites.some((fav) => fav.url === url);
-  favoriteBtn.disabled = !url || exists;
+  const canUse = hasLoadedStandings && Boolean(url);
+  const isFavorite = canUse && exists;
+  if (!favoriteToggleBtn) return;
+  favoriteToggleBtn.disabled = !canUse;
+  favoriteToggleBtn.textContent = isFavorite ? "★" : "☆";
+  favoriteToggleBtn.setAttribute(
+    "aria-label",
+    isFavorite ? "Déjà dans les favoris" : "Ajouter aux favoris"
+  );
+  favoriteToggleBtn.title = isFavorite ? "Déjà dans les favoris" : "Ajouter aux favoris";
 }
 
 function resetManualMatches() {
@@ -924,6 +937,9 @@ function applyFilters() {
 }
 
 async function loadStandings(query) {
+  const requestedUrl = query?.url?.trim() || "";
+  loadedUrl = "";
+  updateFavoriteIconState();
   const params = new URLSearchParams(query);
   setStatus("Chargement en cours...");
   standingsBody.innerHTML = "";
@@ -944,6 +960,8 @@ async function loadStandings(query) {
   const standings = computeStandingsClient(allMatches);
   renderStandings(standings, formMap);
   standingsTitle.textContent = data.title || "";
+  loadedUrl = requestedUrl;
+  updateFavoriteIconState();
 
   const teams = buildTeamOptions(allMatches);
   populateFilter(resultsTeamFilter, teams);
@@ -955,12 +973,30 @@ async function loadStandings(query) {
   setStatus(`Classement mis à jour (${data.source || "OK"}).`);
 }
 
-favoriteBtn.addEventListener("click", addCurrentFavorite);
+favoriteToggleBtn?.addEventListener("click", () => {
+  if (!favoriteToggleBtn || favoriteToggleBtn.disabled) return;
+  const url = urlInput.value.trim();
+  const exists = loadFavorites().some((fav) => fav.url === url);
+  if (exists) {
+    setStatus("Ce classement est déjà en favori.", false);
+    return;
+  }
+  addCurrentFavorite();
+  updateFavoriteIconState();
+});
 clearFavoritesBtn?.addEventListener("click", clearStoredFavorites);
+loadBtn?.addEventListener("click", async () => {
+  try {
+    const query = buildQueryFromForm();
+    await loadStandings(query);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
 
 favoritesSelect.addEventListener("change", async () => {
   urlInput.value = favoritesSelect.value || "";
-  updateFavoriteButtonState();
+  updateFavoriteIconState();
   if (!urlInput.value) return;
   try {
     const query = buildQueryFromForm();
@@ -970,7 +1006,7 @@ favoritesSelect.addEventListener("change", async () => {
   }
 });
 
-urlInput.addEventListener("input", updateFavoriteButtonState);
+urlInput.addEventListener("input", updateFavoriteIconState);
 
 addMissingRowBtn?.addEventListener("click", () => {
   manualRows.push({ date: "", home: "", away: "" });
