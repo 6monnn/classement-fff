@@ -34,9 +34,14 @@ const defaultFavorites = [
     title: "U13 Niveau B - Phase 1 Poule F",
     url: "https://escaut.fff.fr/competitions?tab=calendar&id=439638&phase=1&poule=6&type=ch",
   },
+
   {
     title: "U11 Niveau A - Phase 1 Poule B",
     url: "https://escaut.fff.fr/competitions?tab=calendar&id=439656&phase=1&poule=2&type=ch",
+  },
+  {
+    title: "U11 Niveau B - Phase 1 Poule A",
+    url: "https://escaut.fff.fr/competitions?tab=calendar&id=439651&phase=1&poule=1&type=ch",
   },
 ];
 
